@@ -1,0 +1,6 @@
+crcmod==1.7
+Deprecated==1.2.10
+laspy==1.7.0
+numpy==1.19.4
+tqdm==4.52.0
+wrapt==1.12.1
