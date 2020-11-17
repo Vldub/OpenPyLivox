@@ -106,6 +106,13 @@ class _dataCaptureThread(object):
     def __init__(self, sensorIP, data_socket, imu_socket, filePathAndName, fileType, secsToWait, duration, firmwareType, showMessages, format_spaces, deviceType):
 
         self.startTime = -1
+#         new
+        self.count_packages = 0
+        self.count_of_packages_for_update = 2500 # 2500 for 1 second
+        self.points = []
+        self.point_cloud = []
+        self.flag_read_point_cloud = False
+#         old
         self.sensorIP = sensorIP
         self.d_socket = data_socket
         self.i_socket = imu_socket
@@ -136,13 +143,6 @@ class _dataCaptureThread(object):
         self.self_heating_status = -1
         self.ptp_status = -1
         self.time_sync_status = -1
-
-        # new
-        self.one_second = 0
-        self.threshold_count_updated = 2500
-        self.l_p = []
-        self.new_l_p = []
-        self.read_point_cloud = False
 
         if duration == 0:
             self.duration = 126230400  # 4 years of time (so technically not indefinite)
@@ -983,7 +983,6 @@ class _dataCaptureThread(object):
             deviceCheck = int(self._deviceType[4:7])
         except:
             pass
-
         while True:
 
             if self.started:
@@ -1047,10 +1046,13 @@ class _dataCaptureThread(object):
                 # binFile.write(struct.pack('<h', self.dataType))
 
                 # main loop that captures the desired point cloud data
+                n_point = 0
+                
                 while True:
                     if self.started:
                         timeSinceStart = timestamp_sec - self.startTime
-
+                        
+                        n_point += 1
                         if timeSinceStart <= self.duration:
 
                             # read points from data buffer
@@ -1128,6 +1130,7 @@ class _dataCaptureThread(object):
                                     elif dataType == 2:
                                         # to account for first point's timestamp being increment in the loop
                                         timestamp_sec -= 0.000004167
+
                                         for i in range(0, 96):
 
                                             # Y coordinate (check for non-zero)
@@ -1138,22 +1141,27 @@ class _dataCaptureThread(object):
 
                                             if coord2:
                                                 numPts += 1
+                                                coord1 = struct.unpack('<i', data_pc[bytePos:bytePos + 4])[0]
+                                                coord2 = struct.unpack('<i', data_pc[bytePos + 4:bytePos + 8])[0]
+                                                coord3 = struct.unpack('<i', data_pc[bytePos + 8:bytePos + 12])[0]
+                                                intensitya = struct.unpack('<B', data_pc[bytePos + 12:bytePos + 13])[0]
+                                                self.points.append([coord1, coord2, coord3, intensitya, timestamp_sec])
                                                 # binFile.write(data_pc[bytePos:bytePos + 14])
                                                 # binFile.write(struct.pack('<d', timestamp_sec))
                                             else:
                                                 nullPts += 1
 
                                             bytePos += 14
-                                        self.one_second += 1 
+                                        self.count_packages += 1 
 
-                                        if self.read_point_cloud:
-                                            self.new_l_p = []
+                                        if self.flag_read_point_cloud:
+                                            self.point_cloud = []
                                             self.read_point_cloud = False
-                                        # print(self.one_second)
-                                        if self.one_second == self.threshold_count_updated:
-                                            self.one_second = 0
-                                            self.new_l_p = self.l_p
-                                            self.l_p = []
+                                            
+                                        if self.count_packages == self.count_of_packages_for_update:
+                                            self.count_packages = 0
+                                            self.point_cloud = self.points
+                                            self.points = []
 
                                     # Horizon and Tele-15 Spherical (single return)
                                     elif dataType == 3:
@@ -1379,11 +1387,13 @@ class _dataCaptureThread(object):
 
                         # duration check (exit point)
                         else:
+                            print(n_point)
                             self.started = False
                             self.isCapturing = False
                             break
                     # thread still running check (exit point)
                     else:
+                        print(n_point)
                         break
 
                 self.numPts = numPts
@@ -1396,7 +1406,7 @@ class _dataCaptureThread(object):
                     if self._deviceType == "Horizon" or self._deviceType == "Tele-15":
                         print("                                (IMU records: " + str(imu_records) + ")")
 
-                binFile.close()
+                # binFile.close()
 
                 if IMU_reporting:
                     IMU_file.close()
