@@ -137,6 +137,13 @@ class _dataCaptureThread(object):
         self.ptp_status = -1
         self.time_sync_status = -1
 
+        # new
+        self.one_second = 0
+        self.threshold_count_updated = 2500
+        self.l_p = []
+        self.new_l_p = []
+        self.read_point_cloud = False
+
         if duration == 0:
             self.duration = 126230400  # 4 years of time (so technically not indefinite)
 
@@ -1026,7 +1033,7 @@ class _dataCaptureThread(object):
 
                 if self._showMessages: print(
                     "   " + self.sensorIP + self._format_spaces + "   -->     writing real-time data to BINARY file: " + self.filePathAndName)
-                binFile = open(self.filePathAndName, "wb")
+                # binFile = open(self.filePathAndName, "wb")
                 IMU_file = None
 
                 IMU_reporting = False
@@ -1035,9 +1042,9 @@ class _dataCaptureThread(object):
                 imu_records = 0
 
                 # write header info to know how to parse the data later
-                binFile.write(str.encode("OPENPYLIVOX"))
-                binFile.write(struct.pack('<h', self.firmwareType))
-                binFile.write(struct.pack('<h', self.dataType))
+                # binFile.write(str.encode("OPENPYLIVOX"))
+                # binFile.write(struct.pack('<h', self.firmwareType))
+                # binFile.write(struct.pack('<h', self.dataType))
 
                 # main loop that captures the desired point cloud data
                 while True:
@@ -1131,12 +1138,22 @@ class _dataCaptureThread(object):
 
                                             if coord2:
                                                 numPts += 1
-                                                binFile.write(data_pc[bytePos:bytePos + 14])
-                                                binFile.write(struct.pack('<d', timestamp_sec))
+                                                # binFile.write(data_pc[bytePos:bytePos + 14])
+                                                # binFile.write(struct.pack('<d', timestamp_sec))
                                             else:
                                                 nullPts += 1
 
                                             bytePos += 14
+                                        self.one_second += 1 
+
+                                        if self.read_point_cloud:
+                                            self.new_l_p = []
+                                            self.read_point_cloud = False
+                                        # print(self.one_second)
+                                        if self.one_second == self.threshold_count_updated:
+                                            self.one_second = 0
+                                            self.new_l_p = self.l_p
+                                            self.l_p = []
 
                                     # Horizon and Tele-15 Spherical (single return)
                                     elif dataType == 3:
